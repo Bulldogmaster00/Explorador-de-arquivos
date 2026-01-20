@@ -16,6 +16,8 @@
             overflow: hidden;
             touch-action: none;
             height: 100vh;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         #viewport {
@@ -52,15 +54,22 @@
             margin-bottom: 8px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             position: relative;
+            overflow: hidden;
+        }
+
+        .icon-box img.thumb-img {
+            width: 100%; height: 100%; object-fit: cover;
+            position: absolute; inset: 0;
+            z-index: 1;
         }
 
         .delete-badge {
-            position: absolute; -top: 8px; -right: 8px;
-            width: 24px; height: 24px;
+            position: absolute; top: -5px; right: -5px;
+            width: 22px; height: 22px;
             background: #ef4444; color: white;
             border-radius: 50%; display: none;
             align-items: center; justify-content: center;
-            z-index: 10; border: 2px solid #000;
+            z-index: 50; border: 2px solid #000;
         }
 
         .edit-mode .delete-badge { display: flex; }
@@ -71,16 +80,38 @@
             to { transform: rotate(1deg); }
         }
 
-        .menu-item:active { transform: scale(0.9); }
         .menu-item span {
             font-size: 10px; font-weight: 500; text-align: center;
             width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             color: #ccc;
+            z-index: 2;
+        }
+
+        /* Preview Flutuante */
+        #quick-preview {
+            position: fixed;
+            z-index: 300;
+            pointer-events: none;
+            display: none;
+            width: 180px;
+            height: 180px;
+            background: #111;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.9);
+            overflow: hidden;
+            transform: scale(0);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #quick-preview.active {
+            display: block;
+            transform: scale(1) translateY(-130px);
         }
 
         .bg-folder { background: linear-gradient(135deg, #eab308, #a16207); }
-        .bg-img    { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
-        .bg-vid    { background: linear-gradient(135deg, #f43f5e, #be123c); }
+        .bg-img    { background: #1a1a1a; }
+        .bg-vid    { background: #1a1a1a; }
         .bg-code   { background: linear-gradient(135deg, #10b981, #065f46); }
 
         .nav-bar {
@@ -102,16 +133,6 @@
         
         .action-btn.active { background: #ef4444; color: white; }
 
-        .video-container {
-            width: 100%; height: 100%;
-            display: flex; align-items: center; justify-content: center;
-        }
-        
-        #v-vid {
-            max-width: 100%; max-height: calc(100vh - 150px);
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
-
         #viewer {
             position: fixed; inset: 0; z-index: 200;
             background: #000; display: none; flex-direction: column;
@@ -122,12 +143,23 @@
             display: flex; align-items: center; justify-content: center;
             transition: opacity 0.5s;
         }
+
+        /* Canvas escondido para gerar miniaturas de vídeo */
+        #thumb-canvas { display: none; }
     </style>
 </head>
 <body>
 
     <div id="loader" class="loading-overlay">
         <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-white"></div>
+    </div>
+
+    <canvas id="thumb-canvas"></canvas>
+
+    <!-- Preview Flutuante -->
+    <div id="quick-preview">
+        <img id="qp-img" class="w-full h-full object-cover hidden">
+        <video id="qp-vid" class="w-full h-full object-cover hidden" muted loop playsinline></video>
     </div>
 
     <div id="nav" class="nav-bar opacity-0 transition-opacity">
@@ -170,10 +202,10 @@
             </div>
             <button id="download-btn" class="action-btn bg-white/10"><i data-lucide="download"></i></button>
         </div>
-        <div class="flex-1 flex items-center justify-center p-4">
+        <div class="flex-1 flex items-center justify-center p-4 overflow-hidden">
             <img id="v-img" class="max-w-full max-h-[80vh] object-contain hidden rounded-lg">
-            <div id="v-vid-container" class="video-container hidden">
-                <video id="v-vid" controls playsinline></video>
+            <div id="v-vid-container" class="hidden flex items-center justify-center w-full h-full">
+                <video id="v-vid" class="max-w-full max-h-[80vh]" controls playsinline></video>
             </div>
             <div id="v-text-container" class="w-full h-full bg-zinc-900 rounded-xl p-6 hidden overflow-auto">
                 <pre id="v-text" class="text-emerald-500 font-mono text-[10px] whitespace-pre-wrap"></pre>
@@ -187,6 +219,8 @@
         let currentPath = ['Raiz'];
         let activeFile = null;
         let isEditMode = false;
+        let pressTimer;
+        let thumbCache = new Map(); // Cache para não regenerar thumbs toda a hora
 
         // --- Persistência com IndexedDB ---
         const request = indexedDB.open("SistemaMenuDB", 1);
@@ -202,7 +236,7 @@
             loadFromStorage();
         };
 
-        // --- Navegação e Arrastar ---
+        // --- Motor de Arrastar ---
         let isDragging = false, startX, startY, tx = 0, ty = 0;
         const grid = document.getElementById('menu-grid');
 
@@ -221,6 +255,28 @@
         });
 
         document.addEventListener('touchend', () => isDragging = false);
+
+        // --- Gerador de Miniaturas ---
+        async function generateVideoThumb(file) {
+            return new Promise((resolve) => {
+                const video = document.createElement('video');
+                const canvas = document.getElementById('thumb-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                video.src = URL.createObjectURL(file);
+                video.muted = true;
+                video.currentTime = 1; // Captura o segundo 1 para evitar tela preta no início
+
+                video.onloadeddata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                    URL.revokeObjectURL(video.src);
+                    resolve(dataUrl);
+                };
+            });
+        }
 
         // --- Processamento de Ficheiros ---
         lucide.createIcons();
@@ -285,6 +341,51 @@
             };
         }
 
+        // --- Quick Preview (Hold Logic) ---
+        function startHold(e, file) {
+            if (isEditMode) return;
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!['jpg','png','jpeg','gif','webp','mp4','mov','webm'].includes(ext)) return;
+
+            const rect = e.currentTarget.getBoundingClientRect();
+            const qp = document.getElementById('quick-preview');
+            const qpImg = document.getElementById('qp-img');
+            const qpVid = document.getElementById('qp-vid');
+
+            pressTimer = setTimeout(() => {
+                // Posicionamento inteligente
+                let left = rect.left + rect.width/2 - 90;
+                if (left < 10) left = 10;
+                if (left + 180 > window.innerWidth) left = window.innerWidth - 190;
+
+                qp.style.left = `${left}px`;
+                qp.style.top = `${rect.top}px`;
+                qp.classList.add('active');
+
+                [qpImg, qpVid].forEach(el => el.classList.add('hidden'));
+
+                if (['mp4','mov','webm'].includes(ext)) {
+                    qpVid.src = URL.createObjectURL(file);
+                    qpVid.classList.remove('hidden');
+                    qpVid.play();
+                } else {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => { qpImg.src = ev.target.result; qpImg.classList.remove('hidden'); };
+                    reader.readAsDataURL(file);
+                }
+            }, 450);
+        }
+
+        function endHold() {
+            clearTimeout(pressTimer);
+            const qp = document.getElementById('quick-preview');
+            const qpVid = document.getElementById('qp-vid');
+            qp.classList.remove('active');
+            qpVid.pause();
+            qpVid.src = "";
+        }
+
+        // --- Renderização ---
         function toggleEditMode() {
             isEditMode = !isEditMode;
             document.getElementById('edit-btn').classList.toggle('active', isEditMode);
@@ -294,19 +395,12 @@
         async function deleteItem(e, itemName, catName) {
             e.stopPropagation();
             if (!confirm(`Deseja remover "${itemName}"?`)) return;
-
-            // Remover do storage
             await removeFromStorage(itemName);
-
-            // Remover da estrutura em memória
             delete fsData['Raiz'].items[catName].items[itemName];
-
-            // Se a pasta ficar vazia, removemos a pasta
             if (Object.keys(fsData['Raiz'].items[catName].items).length === 0) {
                 delete fsData['Raiz'].items[catName];
-                if (currentPath.length > 1) goBack(); // Volta se estivermos dentro da pasta apagada
+                if (currentPath.length > 1) goBack();
             }
-
             checkStarter();
             renderMenu();
         }
@@ -317,7 +411,7 @@
             document.getElementById('nav').classList.toggle('opacity-0', !hasFiles);
         }
 
-        function renderMenu() {
+        async function renderMenu() {
             grid.innerHTML = '';
             let current = fsData['Raiz'];
             for(let i = 1; i < currentPath.length; i++) {
@@ -329,33 +423,75 @@
             document.getElementById('item-count').innerText = `${items.length} itens`;
             document.getElementById('back-btn').classList.toggle('hidden', currentPath.length === 1);
 
-            items.forEach((item, idx) => {
+            for (const item of items) {
                 const el = document.createElement('div');
                 let colorClass = 'bg-zinc-800';
                 let iconName = 'file';
+                let isMedia = false;
+                let isVideo = false;
 
+                const ext = item.name.split('.').pop().toLowerCase();
                 if(item.type === 'folder') {
                     colorClass = 'bg-folder';
                     iconName = 'folder';
                 } else {
-                    const ext = item.name.split('.').pop().toLowerCase();
-                    if(['jpg','png','jpeg','webp'].includes(ext)) { colorClass = 'bg-img'; iconName = 'image'; }
-                    else if(['mp4','mov','webm'].includes(ext)) { colorClass = 'bg-vid'; iconName = 'play'; }
+                    if(['jpg','png','jpeg','webp','gif'].includes(ext)) { colorClass = 'bg-img'; iconName = 'image'; isMedia = true; }
+                    else if(['mp4','mov','webm'].includes(ext)) { colorClass = 'bg-vid'; iconName = 'play'; isMedia = true; isVideo = true; }
                     else if(['js','html','py'].includes(ext)) { colorClass = 'bg-code'; iconName = 'code'; }
                 }
 
                 el.className = `menu-item`;
-                
-                // Determinar a categoria para a função de delete
                 const catName = currentPath.length === 1 ? item.name : currentPath[1];
 
-                el.innerHTML = `
-                    <div class="icon-box ${colorClass}">
-                        ${item.type === 'file' ? `<div class="delete-badge" onclick="deleteItem(event, '${item.name}', '${catName}')"><i data-lucide="x" class="w-3 h-3"></i></div>` : ''}
-                        <i data-lucide="${iconName}" class="text-white w-6 h-6"></i>
-                    </div>
-                    <span>${item.name}</span>
-                `;
+                const iconBox = document.createElement('div');
+                iconBox.className = `icon-box ${colorClass}`;
+                
+                // Mostrar Imagem ou Video Thumbnail
+                if (isMedia && item.data) {
+                    const thumb = document.createElement('img');
+                    thumb.className = 'thumb-img';
+                    
+                    if (thumbCache.has(item.name)) {
+                        thumb.src = thumbCache.get(item.name);
+                        iconBox.appendChild(thumb);
+                    } else if (isVideo) {
+                        // Gerar thumb de vídeo
+                        generateVideoThumb(item.data).then(src => {
+                            thumb.src = src;
+                            thumbCache.set(item.name, src);
+                            iconBox.appendChild(thumb);
+                        });
+                        // Ícone temporário enquanto carrega
+                        iconBox.innerHTML += `<i data-lucide="${iconName}" class="text-white/30 w-6 h-6 z-0"></i>`;
+                    } else {
+                        // Carregar imagem
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            thumb.src = e.target.result;
+                            thumbCache.set(item.name, e.target.result);
+                            iconBox.appendChild(thumb);
+                        };
+                        reader.readAsDataURL(item.data);
+                    }
+                } else {
+                    iconBox.innerHTML = `<i data-lucide="${iconName}" class="text-white w-6 h-6"></i>`;
+                }
+
+                if (item.type === 'file') {
+                    iconBox.innerHTML += `<div class="delete-badge" onclick="deleteItem(event, '${item.name}', '${catName}')"><i data-lucide="x" class="w-3 h-3"></i></div>`;
+                }
+
+                el.appendChild(iconBox);
+                const nameSpan = document.createElement('span');
+                nameSpan.innerText = item.name;
+                el.appendChild(nameSpan);
+
+                // Eventos
+                el.onmousedown = (e) => startHold(e, item.data);
+                el.ontouchstart = (e) => startHold(e, item.data);
+                el.onmouseup = endHold;
+                el.onmouseleave = endHold;
+                el.ontouchend = endHold;
 
                 el.onclick = () => {
                     if (isEditMode && item.type === 'file') return;
@@ -367,7 +503,7 @@
                     }
                 };
                 grid.appendChild(el);
-            });
+            }
 
             tx = 0; ty = 0;
             grid.style.transform = `translate(0,0)`;
@@ -402,6 +538,7 @@
             } else if(['mp4','mov','webm'].includes(ext)) {
                 vid.src = URL.createObjectURL(file);
                 vidCont.classList.remove('hidden');
+                vid.play();
             } else {
                 reader.onload = e => { 
                     document.getElementById('v-text').innerText = e.target.result;
