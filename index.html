@@ -33,7 +33,7 @@
             width: 95vw; max-width: 900px;
             gap: 15px;
             transition: transform 0.1s ease-out;
-            padding-top: 80px;
+            padding-top: 100px;
         }
 
         .menu-item {
@@ -83,31 +83,18 @@
         .menu-item span {
             font-size: 10px; font-weight: 500; text-align: center;
             width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            color: #ccc;
-            z-index: 2;
+            color: #ccc; z-index: 2;
         }
 
-        /* Preview Flutuante */
         #quick-preview {
-            position: fixed;
-            z-index: 300;
-            pointer-events: none;
-            display: none;
-            width: 180px;
-            height: 180px;
-            background: #111;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 24px;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.9);
-            overflow: hidden;
-            transform: scale(0);
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: fixed; z-index: 300; pointer-events: none; display: none;
+            width: 180px; height: 180px; background: #111;
+            border: 2px solid rgba(255,255,255,0.3); border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.9); overflow: hidden;
+            transform: scale(0); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        #quick-preview.active {
-            display: block;
-            transform: scale(1) translateY(-130px);
-        }
+        #quick-preview.active { display: block; transform: scale(1) translateY(-130px); }
 
         .bg-folder { background: linear-gradient(135deg, #eab308, #a16207); }
         .bg-img    { background: #1a1a1a; }
@@ -119,7 +106,7 @@
             background: rgba(10,10,10,0.8);
             backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
             padding: 12px 20px;
-            z-index: 100; display: flex; align-items: center; justify-content: space-between;
+            z-index: 100; display: flex; flex-direction: column; gap: 8px;
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
@@ -133,6 +120,13 @@
         
         .action-btn.active { background: #ef4444; color: white; }
 
+        #search-input {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+            padding: 6px 12px; font-size: 12px; color: white; outline: none;
+            width: 100%;
+        }
+
         #viewer {
             position: fixed; inset: 0; z-index: 200;
             background: #000; display: none; flex-direction: column;
@@ -144,7 +138,13 @@
             transition: opacity 0.5s;
         }
 
-        /* Canvas escondido para gerar miniaturas de vídeo */
+        #upload-status {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1);
+            padding: 8px 16px; border-radius: 20px; font-size: 10px;
+            display: none; z-index: 500; letter-spacing: 1px;
+        }
+
         #thumb-canvas { display: none; }
     </style>
 </head>
@@ -156,30 +156,29 @@
 
     <canvas id="thumb-canvas"></canvas>
 
-    <!-- Preview Flutuante -->
     <div id="quick-preview">
         <img id="qp-img" class="w-full h-full object-cover hidden">
         <video id="qp-vid" class="w-full h-full object-cover hidden" muted loop playsinline></video>
     </div>
 
     <div id="nav" class="nav-bar opacity-0 transition-opacity">
-        <div class="flex items-center gap-3">
-            <button onclick="goBack()" id="back-btn" class="action-btn hidden"><i data-lucide="chevron-left"></i></button>
-            <div>
-                <h2 id="view-title" class="text-xs font-bold tracking-widest uppercase">Sistema</h2>
-                <p id="item-count" class="text-[9px] text-gray-500 font-bold">A carregar...</p>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <button onclick="goBack()" id="back-btn" class="action-btn hidden"><i data-lucide="chevron-left"></i></button>
+                <div>
+                    <h2 id="view-title" class="text-xs font-bold tracking-widest uppercase">Sistema</h2>
+                    <p id="item-count" class="text-[9px] text-gray-500 font-bold">A carregar...</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="toggleEditMode()" id="edit-btn" class="action-btn"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                <label class="action-btn cursor-pointer bg-white text-black">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                    <input type="file" id="add-input" multiple class="hidden">
+                </label>
             </div>
         </div>
-        <div class="flex gap-2">
-            <button onclick="toggleEditMode()" id="edit-btn" class="action-btn" title="Remover ficheiros">
-                <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
-            <button onclick="location.reload()" class="action-btn"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
-            <label class="action-btn cursor-pointer bg-blue-600">
-                <i data-lucide="plus" class="w-5 h-5"></i>
-                <input type="file" id="add-input" multiple class="hidden">
-            </label>
-        </div>
+        <input type="text" id="search-input" placeholder="Pesquisar ficheiros..." oninput="handleSearch(this.value)">
     </div>
 
     <div id="viewport">
@@ -193,6 +192,8 @@
             </label>
         </div>
     </div>
+
+    <div id="upload-status">A PROCESSAR FICHEIROS...</div>
 
     <div id="viewer">
         <div class="p-4 flex justify-between items-center bg-zinc-950/50">
@@ -220,9 +221,9 @@
         let activeFile = null;
         let isEditMode = false;
         let pressTimer;
-        let thumbCache = new Map(); // Cache para não regenerar thumbs toda a hora
+        let thumbCache = new Map();
 
-        // --- Persistência com IndexedDB ---
+        // --- Database Setup ---
         const request = indexedDB.open("SistemaMenuDB", 1);
         request.onupgradeneeded = e => {
             const database = e.target.result;
@@ -230,7 +231,6 @@
                 database.createObjectStore("files", { keyPath: "name" });
             }
         };
-
         request.onsuccess = e => {
             db = e.target.result;
             loadFromStorage();
@@ -239,59 +239,55 @@
         // --- Motor de Arrastar ---
         let isDragging = false, startX, startY, tx = 0, ty = 0;
         const grid = document.getElementById('menu-grid');
-
         document.getElementById('viewport').addEventListener('touchstart', (e) => {
-            if(e.target.closest('.menu-item, label, button')) return;
+            if(e.target.closest('.menu-item, label, button, input')) return;
             isDragging = true;
             startX = e.touches[0].clientX - tx;
             startY = e.touches[0].clientY - ty;
         });
-
         document.addEventListener('touchmove', (e) => {
             if(!isDragging) return;
             tx = e.touches[0].clientX - startX;
             ty = e.touches[0].clientY - startY;
             grid.style.transform = `translate(${tx}px, ${ty}px)`;
         });
-
         document.addEventListener('touchend', () => isDragging = false);
 
-        // --- Gerador de Miniaturas ---
+        // --- Miniaturas ---
         async function generateVideoThumb(file) {
             return new Promise((resolve) => {
                 const video = document.createElement('video');
                 const canvas = document.getElementById('thumb-canvas');
                 const ctx = canvas.getContext('2d');
-                
-                video.src = URL.createObjectURL(file);
+                const url = URL.createObjectURL(file);
+                video.src = url;
                 video.muted = true;
-                video.currentTime = 1; // Captura o segundo 1 para evitar tela preta no início
-
+                video.currentTime = 1;
                 video.onloadeddata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
-                    URL.revokeObjectURL(video.src);
+                    canvas.width = 100; canvas.height = 100;
+                    ctx.drawImage(video, 0, 0, 100, 100);
+                    const dataUrl = canvas.toDataURL('image/webp', 0.5);
+                    URL.revokeObjectURL(url);
                     resolve(dataUrl);
                 };
+                video.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
             });
         }
 
-        // --- Processamento de Ficheiros ---
-        lucide.createIcons();
+        // --- Upload ---
         document.getElementById('init-input').addEventListener('change', handleUpload);
         document.getElementById('add-input').addEventListener('change', handleUpload);
 
         async function handleUpload(e) {
             const files = Array.from(e.target.files);
             if(files.length === 0) return;
+            document.getElementById('upload-status').style.display = 'block';
             for (const file of files) {
                 await saveToStorage(file);
                 addToFileSystem(file);
             }
+            document.getElementById('upload-status').style.display = 'none';
             checkStarter();
-            e.target.value = '';
             renderMenu();
         }
 
@@ -311,78 +307,31 @@
         async function saveToStorage(file) {
             return new Promise((resolve) => {
                 const transaction = db.transaction("files", "readwrite");
-                const store = transaction.objectStore("files");
-                store.put({ name: file.name, content: file });
-                transaction.oncomplete = () => resolve();
-            });
-        }
-
-        async function removeFromStorage(name) {
-            return new Promise((resolve) => {
-                const transaction = db.transaction("files", "readwrite");
-                const store = transaction.objectStore("files");
-                store.delete(name);
+                transaction.objectStore("files").put({ name: file.name, content: file });
                 transaction.oncomplete = () => resolve();
             });
         }
 
         async function loadFromStorage() {
             const transaction = db.transaction("files", "readonly");
-            const store = transaction.objectStore("files");
-            const request = store.getAll();
+            const request = transaction.objectStore("files").getAll();
             request.onsuccess = () => {
-                if(request.result.length > 0) {
-                    request.result.forEach(item => addToFileSystem(item.content));
-                    checkStarter();
-                    renderMenu();
-                }
+                request.result.forEach(item => addToFileSystem(item.content));
+                checkStarter();
+                renderMenu();
                 document.getElementById('loader').style.opacity = '0';
                 setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
             };
         }
 
-        // --- Quick Preview (Hold Logic) ---
-        function startHold(e, file) {
-            if (isEditMode) return;
-            const ext = file.name.split('.').pop().toLowerCase();
-            if (!['jpg','png','jpeg','gif','webp','mp4','mov','webm'].includes(ext)) return;
-
-            const rect = e.currentTarget.getBoundingClientRect();
-            const qp = document.getElementById('quick-preview');
-            const qpImg = document.getElementById('qp-img');
-            const qpVid = document.getElementById('qp-vid');
-
-            pressTimer = setTimeout(() => {
-                // Posicionamento inteligente
-                let left = rect.left + rect.width/2 - 90;
-                if (left < 10) left = 10;
-                if (left + 180 > window.innerWidth) left = window.innerWidth - 190;
-
-                qp.style.left = `${left}px`;
-                qp.style.top = `${rect.top}px`;
-                qp.classList.add('active');
-
-                [qpImg, qpVid].forEach(el => el.classList.add('hidden'));
-
-                if (['mp4','mov','webm'].includes(ext)) {
-                    qpVid.src = URL.createObjectURL(file);
-                    qpVid.classList.remove('hidden');
-                    qpVid.play();
-                } else {
-                    const reader = new FileReader();
-                    reader.onload = (ev) => { qpImg.src = ev.target.result; qpImg.classList.remove('hidden'); };
-                    reader.readAsDataURL(file);
-                }
-            }, 450);
-        }
-
-        function endHold() {
-            clearTimeout(pressTimer);
-            const qp = document.getElementById('quick-preview');
-            const qpVid = document.getElementById('qp-vid');
-            qp.classList.remove('active');
-            qpVid.pause();
-            qpVid.src = "";
+        // --- Pesquisa ---
+        function handleSearch(q) {
+            q = q.toLowerCase();
+            const items = document.querySelectorAll('.menu-item');
+            items.forEach(el => {
+                const name = el.querySelector('span').innerText.toLowerCase();
+                el.style.display = name.includes(q) ? 'flex' : 'none';
+            });
         }
 
         // --- Renderização ---
@@ -394,8 +343,8 @@
 
         async function deleteItem(e, itemName, catName) {
             e.stopPropagation();
-            if (!confirm(`Deseja remover "${itemName}"?`)) return;
-            await removeFromStorage(itemName);
+            const transaction = db.transaction("files", "readwrite");
+            transaction.objectStore("files").delete(itemName);
             delete fsData['Raiz'].items[catName].items[itemName];
             if (Object.keys(fsData['Raiz'].items[catName].items).length === 0) {
                 delete fsData['Raiz'].items[catName];
@@ -414,9 +363,7 @@
         async function renderMenu() {
             grid.innerHTML = '';
             let current = fsData['Raiz'];
-            for(let i = 1; i < currentPath.length; i++) {
-                current = current.items[currentPath[i]];
-            }
+            for(let i = 1; i < currentPath.length; i++) current = current.items[currentPath[i]];
 
             const items = Object.values(current.items);
             document.getElementById('view-title').innerText = currentPath.length === 1 ? 'SISTEMA' : current.name;
@@ -425,148 +372,119 @@
 
             for (const item of items) {
                 const el = document.createElement('div');
+                el.className = 'menu-item';
+                const ext = item.name.split('.').pop().toLowerCase();
+                
                 let colorClass = 'bg-zinc-800';
                 let iconName = 'file';
                 let isMedia = false;
                 let isVideo = false;
 
-                const ext = item.name.split('.').pop().toLowerCase();
-                if(item.type === 'folder') {
-                    colorClass = 'bg-folder';
-                    iconName = 'folder';
-                } else {
+                if(item.type === 'folder') { colorClass = 'bg-folder'; iconName = 'folder'; }
+                else {
                     if(['jpg','png','jpeg','webp','gif'].includes(ext)) { colorClass = 'bg-img'; iconName = 'image'; isMedia = true; }
                     else if(['mp4','mov','webm'].includes(ext)) { colorClass = 'bg-vid'; iconName = 'play'; isMedia = true; isVideo = true; }
                     else if(['js','html','py'].includes(ext)) { colorClass = 'bg-code'; iconName = 'code'; }
                 }
 
-                el.className = `menu-item`;
                 const catName = currentPath.length === 1 ? item.name : currentPath[1];
 
-                const iconBox = document.createElement('div');
-                iconBox.className = `icon-box ${colorClass}`;
-                
-                // Mostrar Imagem ou Video Thumbnail
+                el.innerHTML = `
+                    <div class="icon-box ${colorClass}">
+                        <i data-lucide="${iconName}" class="text-white/30 w-6 h-6 z-0"></i>
+                        ${item.type === 'file' ? `<div class="delete-badge" onclick="deleteItem(event, '${item.name}', '${catName}')"><i data-lucide="x" class="w-3 h-3"></i></div>` : ''}
+                    </div>
+                    <span>${item.name}</span>
+                `;
+
+                const iconBox = el.querySelector('.icon-box');
+
                 if (isMedia && item.data) {
                     const thumb = document.createElement('img');
                     thumb.className = 'thumb-img';
-                    
                     if (thumbCache.has(item.name)) {
-                        thumb.src = thumbCache.get(item.name);
-                        iconBox.appendChild(thumb);
+                        thumb.src = thumbCache.get(item.name); iconBox.appendChild(thumb);
                     } else if (isVideo) {
-                        // Gerar thumb de vídeo
                         generateVideoThumb(item.data).then(src => {
-                            thumb.src = src;
-                            thumbCache.set(item.name, src);
-                            iconBox.appendChild(thumb);
+                            if(src) { thumb.src = src; thumbCache.set(item.name, src); iconBox.appendChild(thumb); }
                         });
-                        // Ícone temporário enquanto carrega
-                        iconBox.innerHTML += `<i data-lucide="${iconName}" class="text-white/30 w-6 h-6 z-0"></i>`;
                     } else {
-                        // Carregar imagem
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            thumb.src = e.target.result;
-                            thumbCache.set(item.name, e.target.result);
-                            iconBox.appendChild(thumb);
-                        };
-                        reader.readAsDataURL(item.data);
+                        const r = new FileReader();
+                        r.onload = e => { thumb.src = e.target.result; thumbCache.set(item.name, e.target.result); iconBox.appendChild(thumb); };
+                        r.readAsDataURL(item.data);
                     }
-                } else {
-                    iconBox.innerHTML = `<i data-lucide="${iconName}" class="text-white w-6 h-6"></i>`;
                 }
 
-                if (item.type === 'file') {
-                    iconBox.innerHTML += `<div class="delete-badge" onclick="deleteItem(event, '${item.name}', '${catName}')"><i data-lucide="x" class="w-3 h-3"></i></div>`;
-                }
-
-                el.appendChild(iconBox);
-                const nameSpan = document.createElement('span');
-                nameSpan.innerText = item.name;
-                el.appendChild(nameSpan);
-
-                // Eventos
-                el.onmousedown = (e) => startHold(e, item.data);
-                el.ontouchstart = (e) => startHold(e, item.data);
-                el.onmouseup = endHold;
-                el.onmouseleave = endHold;
-                el.ontouchend = endHold;
+                const handleStart = (e) => startHold(e, item.data);
+                el.onmousedown = handleStart; el.ontouchstart = handleStart;
+                el.onmouseup = endHold; el.onmouseleave = endHold; el.ontouchend = endHold;
 
                 el.onclick = () => {
                     if (isEditMode && item.type === 'file') return;
-                    if(item.type === 'folder') {
-                        currentPath.push(item.name);
-                        renderMenu();
-                    } else {
-                        viewContent(item.data);
-                    }
+                    item.type === 'folder' ? (currentPath.push(item.name), renderMenu()) : viewContent(item.data);
                 };
                 grid.appendChild(el);
             }
-
-            tx = 0; ty = 0;
-            grid.style.transform = `translate(0,0)`;
+            tx = 0; ty = 0; grid.style.transform = `translate(0,0)`;
             lucide.createIcons();
         }
 
-        function goBack() {
-            if(currentPath.length > 1) {
-                currentPath.pop();
-                renderMenu();
-            }
+        function startHold(e, file) {
+            if (isEditMode || !file) return;
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (!['jpg','png','jpeg','gif','webp','mp4','mov','webm'].includes(ext)) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            pressTimer = setTimeout(() => {
+                const qp = document.getElementById('quick-preview');
+                const qpImg = document.getElementById('qp-img');
+                const qpVid = document.getElementById('qp-vid');
+                let left = rect.left + rect.width/2 - 90;
+                left = Math.max(10, Math.min(left, window.innerWidth - 190));
+                qp.style.left = `${left}px`; qp.style.top = `${rect.top}px`;
+                qp.classList.add('active');
+                qpImg.classList.add('hidden'); qpVid.classList.add('hidden');
+                if (['mp4','mov','webm'].includes(ext)) {
+                    qpVid.src = URL.createObjectURL(file); qpVid.classList.remove('hidden'); qpVid.play();
+                } else {
+                    const r = new FileReader(); r.onload = ev => { qpImg.src = ev.target.result; qpImg.classList.remove('hidden'); };
+                    r.readAsDataURL(file);
+                }
+            }, 500);
+        }
+
+        function endHold() {
+            clearTimeout(pressTimer);
+            const qp = document.getElementById('quick-preview');
+            qp.classList.remove('active');
+            document.getElementById('qp-vid').pause();
         }
 
         function viewContent(file) {
             activeFile = file;
             const v = document.getElementById('viewer');
-            const img = document.getElementById('v-img');
-            const vidCont = document.getElementById('v-vid-container');
-            const vid = document.getElementById('v-vid');
-            const txt = document.getElementById('v-text-container');
-            
+            const [img, vidCont, txt] = ['v-img', 'v-vid-container', 'v-text-container'].map(id => document.getElementById(id));
             [img, vidCont, txt].forEach(el => el.classList.add('hidden'));
             document.getElementById('v-name').innerText = file.name;
             v.style.display = 'flex';
-
             const ext = file.name.split('.').pop().toLowerCase();
-            const reader = new FileReader();
-
+            const r = new FileReader();
             if(['jpg','png','jpeg','gif','webp'].includes(ext)) {
-                reader.onload = e => { img.src = e.target.result; img.classList.remove('hidden'); };
-                reader.readAsDataURL(file);
+                r.onload = e => { img.src = e.target.result; img.classList.remove('hidden'); }; r.readAsDataURL(file);
             } else if(['mp4','mov','webm'].includes(ext)) {
-                vid.src = URL.createObjectURL(file);
-                vidCont.classList.remove('hidden');
-                vid.play();
+                document.getElementById('v-vid').src = URL.createObjectURL(file); vidCont.classList.remove('hidden');
+                document.getElementById('v-vid').play();
             } else {
-                reader.onload = e => { 
-                    document.getElementById('v-text').innerText = e.target.result;
-                    txt.classList.remove('hidden');
-                };
-                reader.readAsText(file);
+                r.onload = e => { document.getElementById('v-text').innerText = e.target.result; txt.classList.remove('hidden'); };
+                r.readAsText(file);
             }
         }
 
+        function goBack() { currentPath.pop(); renderMenu(); }
+        function closeViewer() { document.getElementById('viewer').style.display = 'none'; document.getElementById('v-vid').pause(); activeFile = null; }
         document.getElementById('download-btn').onclick = () => {
-            if(!activeFile) return;
-            const url = URL.createObjectURL(activeFile);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = activeFile.name;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const a = document.createElement('a'); a.href = URL.createObjectURL(activeFile); a.download = activeFile.name; a.click();
         };
-
-        function closeViewer() {
-            document.getElementById('viewer').style.display = 'none';
-            const vid = document.getElementById('v-vid');
-            vid.pause();
-            vid.src = "";
-            activeFile = null;
-        }
+        lucide.createIcons();
     </script>
 </body>
 </html>
