@@ -1,230 +1,159 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-pt">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sistem de Arquivos Nativo</title>
+    <title>Explorer APK Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .active-tap:active { transform: scale(0.95); }
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .active-tap:active { transform: scale(0.95); opacity: 0.8; }
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 12px;
+        }
     </style>
 </head>
-<body class="bg-[#F4F7FE] h-screen flex flex-col overflow-hidden text-slate-800">
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
 
-    <!-- Header com Status de Autorização -->
-    <header class="bg-white px-6 py-4 flex items-center justify-between border-b border-slate-200 z-30">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 text-white">
-                <i data-lucide="shield-check"></i>
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="bg-indigo-600 p-2 rounded-lg text-white">
+                <i data-lucide="folder-up" class="w-5 h-5"></i>
             </div>
-            <div>
-                <h1 class="text-lg font-bold">Gerenciador Pro</h1>
-                <div id="auth-status" class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500">
-                    <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                    Acesso Não Autorizado
-                </div>
-            </div>
+            <h1 class="font-bold text-slate-800 text-sm">Meus Ficheiros</h1>
         </div>
         
-        <button id="btn-auth" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold shadow-xl shadow-indigo-100 transition-all active-tap flex items-center gap-2">
-            <i data-lucide="unlock" class="w-4 h-4"></i>
-            Autorizar Acesso
-        </button>
+        <!-- O segredo está aqui: removi o webkitdirectory e deixei apenas multiple -->
+        <label class="bg-indigo-600 text-white p-2.5 rounded-full shadow-md active-tap cursor-pointer">
+            <i data-lucide="plus" class="w-6 h-6"></i>
+            <input type="file" id="fileInput" multiple class="hidden">
+        </label>
     </header>
 
-    <!-- Barra de Caminho -->
-    <nav class="bg-white/50 border-b border-slate-200 px-6 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
-        <div id="breadcrumb" class="flex items-center gap-2 text-sm font-medium text-slate-400 whitespace-nowrap">
-            <i data-lucide="folder" class="w-4 h-4"></i>
-            <span>Selecione a raiz do sistema</span>
-        </div>
-    </nav>
+    <!-- Info bar -->
+    <div id="status-bar" class="bg-indigo-50 px-4 py-2 text-[10px] text-indigo-700 font-bold uppercase tracking-wider hidden">
+        <span id="count-text">0 ficheiros carregados</span>
+    </div>
 
-    <!-- Área Principal -->
-    <main class="flex-1 overflow-y-auto p-6">
-        <div id="explorer-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-6">
-            <!-- Estado de Boas-vindas -->
-            <div class="col-span-full py-20 flex flex-col items-center text-center">
-                <div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mb-6 text-slate-300">
-                    <i data-lucide="monitor" class="w-10 h-10"></i>
-                </div>
-                <h2 class="text-xl font-bold">Acesso Total ao Sistema</h2>
-                <p class="text-slate-500 max-w-sm mt-2 text-sm">Clique em autorizar para conceder permissão de leitura e escrita em qualquer diretório do seu dispositivo.</p>
+    <!-- Lista -->
+    <main class="flex-1 overflow-y-auto p-4">
+        <div id="grid" class="file-grid">
+            <div id="empty-state" class="col-span-full py-20 text-center text-slate-400">
+                <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 opacity-20"></i>
+                <p class="text-xs">Toca no + para selecionar ficheiros<br>(Podes marcar vários de uma vez)</p>
             </div>
         </div>
     </main>
 
-    <!-- Visualizador / Editor de Texto -->
-    <div id="editor-modal" class="fixed inset-0 z-50 bg-white hidden flex flex-col">
-        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between glass sticky top-0">
-            <div class="flex items-center gap-3">
-                <button onclick="closeEditor()" class="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                    <i data-lucide="chevron-left"></i>
-                </button>
-                <h3 id="editor-title" class="font-bold text-slate-700 truncate max-w-[200px]">Editar Arquivo</h3>
-            </div>
-            <button id="btn-save" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-xl text-xs font-bold shadow-lg shadow-emerald-100 flex items-center gap-2 transition-all">
-                <i data-lucide="save" class="w-4 h-4"></i> SALVAR ALTERAÇÕES
-            </button>
+    <!-- Visualizador de Imagem -->
+    <div id="img-viewer" class="fixed inset-0 bg-black/95 z-50 hidden flex flex-col">
+        <div class="p-4 flex justify-end">
+            <button onclick="closeImg()" class="text-white p-2 bg-white/10 rounded-full"><i data-lucide="x"></i></button>
         </div>
-        <textarea id="editor-content" class="flex-1 p-8 outline-none font-mono text-sm leading-relaxed bg-[#FCFCFE] text-slate-700 resize-none"></textarea>
+        <div class="flex-1 flex items-center justify-center p-4">
+            <img id="display-img" class="max-w-full max-h-full object-contain">
+        </div>
+    </div>
+
+    <!-- Editor -->
+    <div id="editor" class="fixed inset-0 bg-white z-50 hidden flex flex-col">
+        <div class="p-4 border-b flex justify-between items-center bg-slate-50">
+            <button onclick="closeEditor()" class="p-2"><i data-lucide="arrow-left"></i></button>
+            <span id="edit-title" class="text-xs font-bold truncate px-4">Arquivo.txt</span>
+            <button id="save-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">SALVAR</button>
+        </div>
+        <textarea id="edit-content" class="flex-1 p-4 text-sm font-mono outline-none bg-white"></textarea>
     </div>
 
     <script>
-        let rootHandle = null;
-        let pathHistory = [];
-        let currentFileHandle = null;
+        let filesMap = [];
 
         lucide.createIcons();
 
-        const btnAuth = document.getElementById('btn-auth');
-        const authStatus = document.getElementById('auth-status');
-        const explorerGrid = document.getElementById('explorer-grid');
-        const breadcrumb = document.getElementById('breadcrumb');
+        const input = document.getElementById('fileInput');
+        const grid = document.getElementById('grid');
+        const statusBar = document.getElementById('status-bar');
+        const countText = document.getElementById('count-text');
 
-        // FUNÇÃO PRINCIPAL: AUTORIZAÇÃO E ACESSO
-        btnAuth.onclick = async () => {
-            try {
-                // Abre o popup nativo de autorização do sistema
-                rootHandle = await window.showDirectoryPicker({
-                    mode: 'readwrite'
-                });
-                
-                // Se chegou aqui, o usuário autorizou
-                pathHistory = [rootHandle];
-                updateAuthUI(true);
-                loadDirectory(rootHandle);
-            } catch (err) {
-                console.error("Autorização negada", err);
-                alert("Para gerenciar arquivos, você precisa autorizar o acesso no popup do navegador.");
-            }
-        };
+        input.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if(files.length === 0) return;
 
-        function updateAuthUI(isAuthorized) {
-            if(isAuthorized) {
-                authStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Acesso Autorizado';
-                authStatus.className = "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-500";
-                btnAuth.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4"></i> Atualizar';
-            }
-            lucide.createIcons();
-        }
-
-        async function loadDirectory(handle) {
-            explorerGrid.innerHTML = '';
-            updateBreadcrumbs();
+            // No APK, adicionamos à lista atual em vez de substituir
+            filesMap = [...filesMap, ...files];
             
-            const entries = [];
-            for await (const entry of handle.values()) {
-                entries.push(entry);
-            }
+            document.getElementById('empty-state').classList.add('hidden');
+            statusBar.classList.remove('hidden');
+            countText.innerText = `${filesMap.length} ficheiros na lista`;
+            
+            render();
+        });
 
-            // Ordenar: Pastas primeiro
-            entries.sort((a, b) => (b.kind === 'directory') - (a.kind === 'directory') || a.name.localeCompare(b.name));
-
-            if (entries.length === 0) {
-                explorerGrid.innerHTML = '<div class="col-span-full text-slate-400 italic text-center py-10">Pasta vazia</div>';
-            }
-
-            entries.forEach(entry => {
+        function render() {
+            grid.innerHTML = '';
+            filesMap.forEach((file, index) => {
+                const ext = file.name.split('.').pop().toLowerCase();
                 const card = document.createElement('div');
-                card.className = "active-tap flex flex-col items-center p-4 rounded-[2rem] hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all cursor-pointer group border border-transparent hover:border-slate-100";
+                card.className = "flex flex-col items-center p-2 rounded-xl active-tap bg-white shadow-sm border border-slate-100";
                 
-                const isDir = entry.kind === 'directory';
-                const icon = isDir ? 'folder' : getFileIcon(entry.name);
-                const color = isDir ? 'text-amber-400 fill-amber-400' : 'text-slate-400';
+                let icon = 'file';
+                let color = 'text-slate-400';
+
+                if(['jpg','png','jpeg','gif'].includes(ext)) { icon = 'image'; color = 'text-blue-500'; }
+                else if(['txt','md','html','js','css'].includes(ext)) { icon = 'file-text'; color = 'text-emerald-500'; }
+                else if(['mp4','mov'].includes(ext)) { icon = 'video'; color = 'text-purple-500'; }
 
                 card.innerHTML = `
-                    <div class="w-14 h-14 flex items-center justify-center mb-3">
-                        <i data-lucide="${icon}" class="w-10 h-10 ${color} group-hover:scale-110 transition-transform"></i>
-                    </div>
-                    <span class="text-[10px] font-bold text-slate-600 text-center truncate w-full px-2" title="${entry.name}">${entry.name}</span>
+                    <div class="mb-1"><i data-lucide="${icon}" class="w-8 h-8 ${color}"></i></div>
+                    <span class="text-[9px] font-medium text-slate-600 truncate w-full text-center">${file.name}</span>
                 `;
 
-                card.onclick = () => {
-                    if (isDir) {
-                        pathHistory.push(entry);
-                        loadDirectory(entry);
-                    } else {
-                        openFile(entry);
-                    }
-                };
-
-                explorerGrid.appendChild(card);
+                card.onclick = () => openFile(file);
+                grid.appendChild(card);
             });
-
             lucide.createIcons();
         }
 
-        async function openFile(handle) {
-            const file = await handle.getFile();
+        function openFile(file) {
             const ext = file.name.split('.').pop().toLowerCase();
-            
-            // Suporte para edição de texto
-            const textExts = ['txt', 'html', 'css', 'js', 'json', 'md', 'py', 'php'];
-            
-            if (textExts.includes(ext)) {
-                const content = await file.text();
-                currentFileHandle = handle;
-                document.getElementById('editor-title').innerText = file.name;
-                document.getElementById('editor-content').value = content;
-                document.getElementById('editor-modal').classList.remove('hidden');
-                lucide.createIcons();
-            } else {
-                alert(`Arquivo "${file.name}" reconhecido. Por segurança, apenas arquivos de texto/código podem ser editados diretamente.`);
-            }
-        }
+            const reader = new FileReader();
 
-        // SALVAMENTO REAL NO DISCO
-        document.getElementById('btn-save').onclick = async () => {
-            if (!currentFileHandle) return;
-            
-            try {
-                const writable = await currentFileHandle.createWritable();
-                await writable.write(document.getElementById('editor-content').value);
-                await writable.close();
-                
-                const btn = document.getElementById('btn-save');
-                btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> SALVO!';
-                setTimeout(() => {
-                    btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> SALVAR ALTERAÇÕES';
+            if(['jpg','png','jpeg','gif'].includes(ext)) {
+                reader.onload = (e) => {
+                    document.getElementById('display-img').src = e.target.result;
+                    document.getElementById('img-viewer').classList.remove('hidden');
                     lucide.createIcons();
-                }, 2000);
-            } catch (err) {
-                alert("Erro ao salvar: Verifique se você deu permissão de escrita.");
+                };
+                reader.readAsDataURL(file);
+            } 
+            else if(['txt','md','html','js','css','json'].includes(ext)) {
+                reader.onload = (e) => {
+                    document.getElementById('edit-title').innerText = file.name;
+                    document.getElementById('edit-content').value = e.target.result;
+                    document.getElementById('editor').classList.remove('hidden');
+                    lucide.createIcons();
+                };
+                reader.readAsText(file);
             }
+        }
+
+        function closeImg() { document.getElementById('img-viewer').classList.add('hidden'); }
+        function closeEditor() { document.getElementById('editor').classList.add('hidden'); }
+
+        document.getElementById('save-btn').onclick = () => {
+            const content = document.getElementById('edit-content').value;
+            const blob = new Blob([content], {type: 'text/plain'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = document.getElementById('edit-title').innerText;
+            a.click();
+            alert("Cópia guardada nas transferências (downloads)");
         };
-
-        function closeEditor() {
-            document.getElementById('editor-modal').classList.add('hidden');
-            currentFileHandle = null;
-        }
-
-        function updateBreadcrumbs() {
-            breadcrumb.innerHTML = pathHistory.map((h, i) => `
-                <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
-                <button onclick="jumpTo(${i})" class="${i === pathHistory.length -1 ? 'text-indigo-600 font-bold' : 'hover:text-slate-600'} transition-colors">
-                    ${h.name}
-                </button>
-            `).join('');
-            lucide.createIcons();
-        }
-
-        function jumpTo(index) {
-            pathHistory = pathHistory.slice(0, index + 1);
-            loadDirectory(pathHistory[index]);
-        }
-
-        function getFileIcon(name) {
-            const ext = name.split('.').pop().toLowerCase();
-            if (['jpg', 'png', 'svg', 'webp'].includes(ext)) return 'image';
-            if (['mp4', 'webm'].includes(ext)) return 'video';
-            if (['txt', 'md', 'js', 'html'].includes(ext)) return 'file-text';
-            return 'file';
-        }
     </script>
 </body>
 </html>
