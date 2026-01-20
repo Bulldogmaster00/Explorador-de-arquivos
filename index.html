@@ -144,7 +144,7 @@
             transition: opacity 0.5s;
         }
 
-        /* Canvas escondido para gerar miniaturas de vídeo */
+        /* Canvas escondido para gerar miniaturas */
         #thumb-canvas { display: none; }
     </style>
 </head>
@@ -220,7 +220,9 @@
         let activeFile = null;
         let isEditMode = false;
         let pressTimer;
-        let thumbCache = new Map(); // Cache para não regenerar thumbs toda a hora
+        let thumbCache = new Map();
+
+        const THUMB_TARGET_HEIGHT = 144; // Definição fixa para miniaturas 144p
 
         // --- Persistência com IndexedDB ---
         const request = indexedDB.open("SistemaMenuDB", 1);
@@ -256,25 +258,43 @@
 
         document.addEventListener('touchend', () => isDragging = false);
 
-        // --- Gerador de Miniaturas ---
-        async function generateVideoThumb(file) {
+        // --- Gerador de Miniaturas (Agora suporta Imagem e Vídeo a 144p) ---
+        async function generate144pThumb(file, isVideo = false) {
             return new Promise((resolve) => {
-                const video = document.createElement('video');
                 const canvas = document.getElementById('thumb-canvas');
                 const ctx = canvas.getContext('2d');
                 
-                video.src = URL.createObjectURL(file);
-                video.muted = true;
-                video.currentTime = 1; // Captura o segundo 1 para evitar tela preta no início
+                const processSource = (source) => {
+                    const originalWidth = isVideo ? source.videoWidth : source.width;
+                    const originalHeight = isVideo ? source.videoHeight : source.height;
+                    
+                    const ratio = originalWidth / originalHeight;
+                    canvas.height = THUMB_TARGET_HEIGHT;
+                    canvas.width = THUMB_TARGET_HEIGHT * ratio;
 
-                video.onloadeddata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
-                    URL.revokeObjectURL(video.src);
+                    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6); // Compressão para performance
                     resolve(dataUrl);
                 };
+
+                if (isVideo) {
+                    const video = document.createElement('video');
+                    video.src = URL.createObjectURL(file);
+                    video.muted = true;
+                    video.currentTime = 1;
+                    video.onloadeddata = () => {
+                        processSource(video);
+                        URL.revokeObjectURL(video.src);
+                    };
+                } else {
+                    const img = new Image();
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        img.onload = () => processSource(img);
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
             });
         }
 
@@ -341,7 +361,7 @@
             };
         }
 
-        // --- Quick Preview (Hold Logic) ---
+        // --- Quick Preview ---
         function startHold(e, file) {
             if (isEditMode) return;
             const ext = file.name.split('.').pop().toLowerCase();
@@ -353,7 +373,6 @@
             const qpVid = document.getElementById('qp-vid');
 
             pressTimer = setTimeout(() => {
-                // Posicionamento inteligente
                 let left = rect.left + rect.width/2 - 90;
                 if (left < 10) left = 10;
                 if (left + 180 > window.innerWidth) left = window.innerWidth - 190;
@@ -446,7 +465,7 @@
                 const iconBox = document.createElement('div');
                 iconBox.className = `icon-box ${colorClass}`;
                 
-                // Mostrar Imagem ou Video Thumbnail
+                // Processamento de Miniatura a 144p
                 if (isMedia && item.data) {
                     const thumb = document.createElement('img');
                     thumb.className = 'thumb-img';
@@ -454,24 +473,15 @@
                     if (thumbCache.has(item.name)) {
                         thumb.src = thumbCache.get(item.name);
                         iconBox.appendChild(thumb);
-                    } else if (isVideo) {
-                        // Gerar thumb de vídeo
-                        generateVideoThumb(item.data).then(src => {
+                    } else {
+                        // Gera a versão 144p (Imagens e Vídeos)
+                        generate144pThumb(item.data, isVideo).then(src => {
                             thumb.src = src;
                             thumbCache.set(item.name, src);
                             iconBox.appendChild(thumb);
                         });
-                        // Ícone temporário enquanto carrega
+                        // Ícone temporário
                         iconBox.innerHTML += `<i data-lucide="${iconName}" class="text-white/30 w-6 h-6 z-0"></i>`;
-                    } else {
-                        // Carregar imagem
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            thumb.src = e.target.result;
-                            thumbCache.set(item.name, e.target.result);
-                            iconBox.appendChild(thumb);
-                        };
-                        reader.readAsDataURL(item.data);
                     }
                 } else {
                     iconBox.innerHTML = `<i data-lucide="${iconName}" class="text-white w-6 h-6"></i>`;
@@ -486,7 +496,6 @@
                 nameSpan.innerText = item.name;
                 el.appendChild(nameSpan);
 
-                // Eventos
                 el.onmousedown = (e) => startHold(e, item.data);
                 el.ontouchstart = (e) => startHold(e, item.data);
                 el.onmouseup = endHold;
@@ -570,3 +579,4 @@
     </script>
 </body>
 </html>
+
