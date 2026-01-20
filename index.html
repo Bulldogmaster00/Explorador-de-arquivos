@@ -3,157 +3,310 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Explorer APK Fix</title>
+    <title>Sistema de Ficheiros</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-        .active-tap:active { transform: scale(0.95); opacity: 0.8; }
-        .file-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-            gap: 12px;
+        :root { --bg-deep: #050505; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-deep);
+            color: white;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        /* --- Área de Trabalho --- */
+        #viewport {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+        }
+
+        /* --- Grelha de Ícones --- */
+        #menu-grid {
+            position: relative;
+            display: flex; flex-wrap: wrap;
+            justify-content: center; align-items: center;
+            width: 95vw; max-width: 900px;
+            gap: 20px;
+            transition: transform 0.1s ease-out;
+        }
+
+        /* --- Estilo dos Botões do Menu --- */
+        .menu-item {
+            width: 100px; height: 100px;
+            border-radius: 24px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03);
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.5s ease backwards;
+        }
+
+        @keyframes fadeIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .menu-item:active { transform: scale(0.9); background: rgba(255,255,255,0.1); }
+
+        /* Cores de Categoria */
+        .bg-folder { background: linear-gradient(135deg, #fbbf24, #d97706); }
+        .bg-img    { background: linear-gradient(135deg, #38bdf8, #0284c7); }
+        .bg-vid    { background: linear-gradient(135deg, #f472b6, #db2777); }
+        .bg-code   { background: linear-gradient(135deg, #34d399, #059669); }
+        .bg-doc    { background: linear-gradient(135deg, #818cf8, #4f46e5); }
+
+        .menu-item span {
+            font-size: 10px; font-weight: 500;
+            margin-top: 8px; max-width: 85%;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            color: rgba(255,255,255,0.8);
+        }
+
+        /* Botão de Entrada */
+        .entry-orb {
+            width: 140px; height: 140px;
+            background: #fff; color: #000;
+            border-radius: 40px; display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+            font-weight: 700; text-transform: uppercase;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            cursor: pointer; transition: all 0.3s;
+        }
+        .entry-orb:active { transform: scale(0.95); }
+
+        /* Barra Superior */
+        .nav-bar {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            padding: 15px 25px;
+            z-index: 100; display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .action-btn {
+            width: 44px; height: 44px;
+            border-radius: 12px; display: flex;
+            align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.05);
+            transition: 0.2s;
+        }
+        .action-btn:active { background: rgba(255,255,255,0.15); }
+
+        /* Visualizador Moderno */
+        #viewer {
+            position: fixed; inset: 0; z-index: 200;
+            background: #000;
+            display: none; flex-direction: column;
         }
     </style>
 </head>
-<body class="bg-slate-50 h-screen flex flex-col overflow-hidden">
+<body>
 
-    <!-- Header -->
-    <header class="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm shrink-0">
-        <div class="flex items-center gap-2">
-            <div class="bg-indigo-600 p-2 rounded-lg text-white">
-                <i data-lucide="folder-up" class="w-5 h-5"></i>
+    <!-- Barra de Navegação -->
+    <div id="nav" class="nav-bar opacity-0 transition-opacity duration-500">
+        <div class="flex items-center gap-4">
+            <button onclick="goBack()" id="back-btn" class="action-btn hidden"><i data-lucide="chevron-left"></i></button>
+            <div>
+                <h2 id="view-title" class="text-sm font-bold tracking-tight">MENU PRINCIPAL</h2>
+                <p id="item-count" class="text-[10px] text-gray-500 font-medium">0 itens carregados</p>
             </div>
-            <h1 class="font-bold text-slate-800 text-sm">Meus Ficheiros</h1>
         </div>
-        
-        <!-- O segredo está aqui: removi o webkitdirectory e deixei apenas multiple -->
-        <label class="bg-indigo-600 text-white p-2.5 rounded-full shadow-md active-tap cursor-pointer">
-            <i data-lucide="plus" class="w-6 h-6"></i>
-            <input type="file" id="fileInput" multiple class="hidden">
+        <label class="action-btn cursor-pointer bg-blue-600 text-white">
+            <i data-lucide="plus"></i>
+            <input type="file" id="add-input" multiple class="hidden">
         </label>
-    </header>
-
-    <!-- Info bar -->
-    <div id="status-bar" class="bg-indigo-50 px-4 py-2 text-[10px] text-indigo-700 font-bold uppercase tracking-wider hidden">
-        <span id="count-text">0 ficheiros carregados</span>
     </div>
 
-    <!-- Lista -->
-    <main class="flex-1 overflow-y-auto p-4">
-        <div id="grid" class="file-grid">
-            <div id="empty-state" class="col-span-full py-20 text-center text-slate-400">
-                <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 opacity-20"></i>
-                <p class="text-xs">Toca no + para selecionar ficheiros<br>(Podes marcar vários de uma vez)</p>
-            </div>
+    <!-- Área Principal -->
+    <div id="viewport">
+        <div id="menu-grid">
+            <label class="entry-orb" id="starter">
+                <i data-lucide="folder-open" class="w-10 h-10 mb-2"></i>
+                <span class="text-xs">Abrir Menu</span>
+                <input type="file" id="init-input" multiple class="hidden">
+            </label>
         </div>
-    </main>
+    </div>
 
-    <!-- Visualizador de Imagem -->
-    <div id="img-viewer" class="fixed inset-0 bg-black/95 z-50 hidden flex flex-col">
-        <div class="p-4 flex justify-end">
-            <button onclick="closeImg()" class="text-white p-2 bg-white/10 rounded-full"><i data-lucide="x"></i></button>
+    <!-- Visualizador de Conteúdo -->
+    <div id="viewer">
+        <div class="p-6 flex justify-between items-center border-b border-white/5">
+            <h3 id="v-name" class="font-bold text-xs truncate text-gray-400 uppercase tracking-widest">Visualizar</h3>
+            <button onclick="closeViewer()" class="action-btn bg-white/5"><i data-lucide="x"></i></button>
         </div>
         <div class="flex-1 flex items-center justify-center p-4">
-            <img id="display-img" class="max-w-full max-h-full object-contain">
+            <img id="v-img" class="max-w-full max-h-full object-contain hidden rounded-lg">
+            <video id="v-vid" controls class="max-w-full max-h-full hidden rounded-lg"></video>
+            <div id="v-text-container" class="w-full h-full bg-zinc-900 rounded-2xl p-6 hidden overflow-auto">
+                <pre id="v-text" class="text-emerald-500 font-mono text-xs whitespace-pre-wrap"></pre>
+            </div>
         </div>
-    </div>
-
-    <!-- Editor -->
-    <div id="editor" class="fixed inset-0 bg-white z-50 hidden flex flex-col">
-        <div class="p-4 border-b flex justify-between items-center bg-slate-50">
-            <button onclick="closeEditor()" class="p-2"><i data-lucide="arrow-left"></i></button>
-            <span id="edit-title" class="text-xs font-bold truncate px-4">Arquivo.txt</span>
-            <button id="save-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold">SALVAR</button>
-        </div>
-        <textarea id="edit-content" class="flex-1 p-4 text-sm font-mono outline-none bg-white"></textarea>
     </div>
 
     <script>
-        let filesMap = [];
+        let fsData = { 'Raiz': { items: {} } };
+        let currentPath = ['Raiz'];
+        
+        // --- Controlo de Navegação ---
+        let isDragging = false, startX, startY, tx = 0, ty = 0;
+        const viewport = document.getElementById('viewport');
+        const grid = document.getElementById('menu-grid');
 
+        viewport.addEventListener('touchstart', (e) => {
+            if(e.target.closest('.menu-item, .entry-orb, .nav-bar')) return;
+            isDragging = true;
+            startX = e.touches[0].clientX - tx;
+            startY = e.touches[0].clientY - ty;
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if(!isDragging) return;
+            tx = e.touches[0].clientX - startX;
+            ty = e.touches[0].clientY - startY;
+            grid.style.transform = `translate(${tx}px, ${ty}px)`;
+        });
+
+        document.addEventListener('touchend', () => isDragging = false);
+
+        // --- Gestão de Ficheiros ---
         lucide.createIcons();
 
-        const input = document.getElementById('fileInput');
-        const grid = document.getElementById('grid');
-        const statusBar = document.getElementById('status-bar');
-        const countText = document.getElementById('count-text');
+        document.getElementById('init-input').addEventListener('change', handleUpload);
+        document.getElementById('add-input').addEventListener('change', handleUpload);
 
-        input.addEventListener('change', (e) => {
+        function handleUpload(e) {
             const files = Array.from(e.target.files);
             if(files.length === 0) return;
 
-            // No APK, adicionamos à lista atual em vez de substituir
-            filesMap = [...filesMap, ...files];
+            processFiles(files);
+            document.getElementById('starter').classList.add('hidden');
+            document.getElementById('nav').classList.remove('opacity-0');
             
-            document.getElementById('empty-state').classList.add('hidden');
-            statusBar.classList.remove('hidden');
-            countText.innerText = `${filesMap.length} ficheiros na lista`;
-            
-            render();
-        });
+            e.target.value = ''; // Reset para novas adições
+            renderMenu();
+        }
 
-        function render() {
-            grid.innerHTML = '';
-            filesMap.forEach((file, index) => {
-                const ext = file.name.split('.').pop().toLowerCase();
-                const card = document.createElement('div');
-                card.className = "flex flex-col items-center p-2 rounded-xl active-tap bg-white shadow-sm border border-slate-100";
+        function processFiles(files) {
+            files.forEach(f => {
+                const ext = f.name.split('.').pop().toLowerCase();
+                let category = 'Documentos';
                 
-                let icon = 'file';
-                let color = 'text-slate-400';
+                if(['jpg','png','jpeg','gif','webp'].includes(ext)) category = 'Imagens';
+                else if(['mp4','mov','webm'].includes(ext)) category = 'Vídeos';
+                else if(['js','html','css','py','json'].includes(ext)) category = 'Scripts';
 
-                if(['jpg','png','jpeg','gif'].includes(ext)) { icon = 'image'; color = 'text-blue-500'; }
-                else if(['txt','md','html','js','css'].includes(ext)) { icon = 'file-text'; color = 'text-emerald-500'; }
-                else if(['mp4','mov'].includes(ext)) { icon = 'video'; color = 'text-purple-500'; }
+                if(!fsData['Raiz'].items[category]) {
+                    fsData['Raiz'].items[category] = { type: 'folder', name: category, items: {} };
+                }
+                
+                fsData['Raiz'].items[category].items[f.name] = { type: 'file', name: f.name, data: f };
+            });
+        }
 
-                card.innerHTML = `
-                    <div class="mb-1"><i data-lucide="${icon}" class="w-8 h-8 ${color}"></i></div>
-                    <span class="text-[9px] font-medium text-slate-600 truncate w-full text-center">${file.name}</span>
+        function renderMenu() {
+            grid.innerHTML = '';
+            
+            let current = fsData['Raiz'];
+            for(let i = 1; i < currentPath.length; i++) {
+                current = current.items[currentPath[i]];
+            }
+
+            const items = Object.values(current.items);
+            document.getElementById('view-title').innerText = currentPath.length === 1 ? 'MENU PRINCIPAL' : current.name.toUpperCase();
+            document.getElementById('item-count').innerText = `${items.length} itens encontrados`;
+            document.getElementById('back-btn').style.display = currentPath.length > 1 ? 'flex' : 'none';
+
+            items.forEach((item, idx) => {
+                const el = document.createElement('div');
+                let colorClass = 'bg-doc';
+                let iconName = 'file-text';
+
+                if(item.type === 'folder') {
+                    colorClass = 'bg-folder';
+                    iconName = 'folder';
+                } else {
+                    const ext = item.name.split('.').pop().toLowerCase();
+                    if(['jpg','png','jpeg','webp'].includes(ext)) { colorClass = 'bg-img'; iconName = 'image'; }
+                    else if(['mp4','mov','webm'].includes(ext)) { colorClass = 'bg-vid'; iconName = 'play-circle'; }
+                    else if(['js','html','py','css'].includes(ext)) { colorClass = 'bg-code'; iconName = 'terminal'; }
+                }
+
+                el.className = `menu-item`;
+                el.style.animationDelay = `${idx * 0.04}s`;
+                el.innerHTML = `
+                    <div class="w-12 h-12 ${colorClass} rounded-xl flex items-center justify-center mb-1 shadow-lg">
+                        <i data-lucide="${iconName}" class="text-white w-6 h-6"></i>
+                    </div>
+                    <span>${item.name}</span>
                 `;
 
-                card.onclick = () => openFile(file);
-                grid.appendChild(card);
+                el.onclick = () => {
+                    if(item.type === 'folder') {
+                        currentPath.push(item.name);
+                        renderMenu();
+                    } else {
+                        viewContent(item.data);
+                    }
+                };
+
+                grid.appendChild(el);
             });
+
+            tx = 0; ty = 0;
+            grid.style.transform = `translate(0,0)`;
             lucide.createIcons();
         }
 
-        function openFile(file) {
+        function goBack() {
+            if(currentPath.length > 1) {
+                currentPath.pop();
+                renderMenu();
+            }
+        }
+
+        // --- Visualizador ---
+        function viewContent(file) {
+            const v = document.getElementById('viewer');
+            const img = document.getElementById('v-img');
+            const vid = document.getElementById('v-vid');
+            const txt = document.getElementById('v-text-container');
+            
+            [img, vid, txt].forEach(el => el.classList.add('hidden'));
+            document.getElementById('v-name').innerText = file.name;
+            v.style.display = 'flex';
+
             const ext = file.name.split('.').pop().toLowerCase();
             const reader = new FileReader();
 
-            if(['jpg','png','jpeg','gif'].includes(ext)) {
-                reader.onload = (e) => {
-                    document.getElementById('display-img').src = e.target.result;
-                    document.getElementById('img-viewer').classList.remove('hidden');
-                    lucide.createIcons();
-                };
+            if(['jpg','png','jpeg','gif','webp'].includes(ext)) {
+                reader.onload = e => { img.src = e.target.result; img.classList.remove('hidden'); };
                 reader.readAsDataURL(file);
-            } 
-            else if(['txt','md','html','js','css','json'].includes(ext)) {
-                reader.onload = (e) => {
-                    document.getElementById('edit-title').innerText = file.name;
-                    document.getElementById('edit-content').value = e.target.result;
-                    document.getElementById('editor').classList.remove('hidden');
-                    lucide.createIcons();
+            } else if(['mp4','mov','webm'].includes(ext)) {
+                vid.src = URL.createObjectURL(file);
+                vid.classList.remove('hidden');
+            } else {
+                reader.onload = e => { 
+                    document.getElementById('v-text').innerText = e.target.result;
+                    txt.classList.remove('hidden');
                 };
                 reader.readAsText(file);
             }
         }
 
-        function closeImg() { document.getElementById('img-viewer').classList.add('hidden'); }
-        function closeEditor() { document.getElementById('editor').classList.add('hidden'); }
-
-        document.getElementById('save-btn').onclick = () => {
-            const content = document.getElementById('edit-content').value;
-            const blob = new Blob([content], {type: 'text/plain'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = document.getElementById('edit-title').innerText;
-            a.click();
-            alert("Cópia guardada nas transferências (downloads)");
-        };
+        function closeViewer() {
+            document.getElementById('viewer').style.display = 'none';
+            const vid = document.getElementById('v-vid');
+            vid.pause();
+            vid.src = "";
+        }
     </script>
 </body>
 </html>
