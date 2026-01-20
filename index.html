@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistem de Arquivos Nativo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .active-tap:active { transform: scale(0.95); }
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="bg-[#F4F7FE] h-screen flex flex-col overflow-hidden text-slate-800">
+
+    <!-- Header com Status de Autorização -->
+    <header class="bg-white px-6 py-4 flex items-center justify-between border-b border-slate-200 z-30">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 text-white">
+                <i data-lucide="shield-check"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold">Gerenciador Pro</h1>
+                <div id="auth-status" class="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-red-500">
+                    <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                    Acesso Não Autorizado
+                </div>
+            </div>
+        </div>
+        
+        <button id="btn-auth" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl text-sm font-semibold shadow-xl shadow-indigo-100 transition-all active-tap flex items-center gap-2">
+            <i data-lucide="unlock" class="w-4 h-4"></i>
+            Autorizar Acesso
+        </button>
+    </header>
+
+    <!-- Barra de Caminho -->
+    <nav class="bg-white/50 border-b border-slate-200 px-6 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <div id="breadcrumb" class="flex items-center gap-2 text-sm font-medium text-slate-400 whitespace-nowrap">
+            <i data-lucide="folder" class="w-4 h-4"></i>
+            <span>Selecione a raiz do sistema</span>
+        </div>
+    </nav>
+
+    <!-- Área Principal -->
+    <main class="flex-1 overflow-y-auto p-6">
+        <div id="explorer-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-6">
+            <!-- Estado de Boas-vindas -->
+            <div class="col-span-full py-20 flex flex-col items-center text-center">
+                <div class="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mb-6 text-slate-300">
+                    <i data-lucide="monitor" class="w-10 h-10"></i>
+                </div>
+                <h2 class="text-xl font-bold">Acesso Total ao Sistema</h2>
+                <p class="text-slate-500 max-w-sm mt-2 text-sm">Clique em autorizar para conceder permissão de leitura e escrita em qualquer diretório do seu dispositivo.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Visualizador / Editor de Texto -->
+    <div id="editor-modal" class="fixed inset-0 z-50 bg-white hidden flex flex-col">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between glass sticky top-0">
+            <div class="flex items-center gap-3">
+                <button onclick="closeEditor()" class="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                    <i data-lucide="chevron-left"></i>
+                </button>
+                <h3 id="editor-title" class="font-bold text-slate-700 truncate max-w-[200px]">Editar Arquivo</h3>
+            </div>
+            <button id="btn-save" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-xl text-xs font-bold shadow-lg shadow-emerald-100 flex items-center gap-2 transition-all">
+                <i data-lucide="save" class="w-4 h-4"></i> SALVAR ALTERAÇÕES
+            </button>
+        </div>
+        <textarea id="editor-content" class="flex-1 p-8 outline-none font-mono text-sm leading-relaxed bg-[#FCFCFE] text-slate-700 resize-none"></textarea>
+    </div>
+
+    <script>
+        let rootHandle = null;
+        let pathHistory = [];
+        let currentFileHandle = null;
+
+        lucide.createIcons();
+
+        const btnAuth = document.getElementById('btn-auth');
+        const authStatus = document.getElementById('auth-status');
+        const explorerGrid = document.getElementById('explorer-grid');
+        const breadcrumb = document.getElementById('breadcrumb');
+
+        // FUNÇÃO PRINCIPAL: AUTORIZAÇÃO E ACESSO
+        btnAuth.onclick = async () => {
+            try {
+                // Abre o popup nativo de autorização do sistema
+                rootHandle = await window.showDirectoryPicker({
+                    mode: 'readwrite'
+                });
+                
+                // Se chegou aqui, o usuário autorizou
+                pathHistory = [rootHandle];
+                updateAuthUI(true);
+                loadDirectory(rootHandle);
+            } catch (err) {
+                console.error("Autorização negada", err);
+                alert("Para gerenciar arquivos, você precisa autorizar o acesso no popup do navegador.");
+            }
+        };
+
+        function updateAuthUI(isAuthorized) {
+            if(isAuthorized) {
+                authStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Acesso Autorizado';
+                authStatus.className = "flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-500";
+                btnAuth.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4"></i> Atualizar';
+            }
+            lucide.createIcons();
+        }
+
+        async function loadDirectory(handle) {
+            explorerGrid.innerHTML = '';
+            updateBreadcrumbs();
+            
+            const entries = [];
+            for await (const entry of handle.values()) {
+                entries.push(entry);
+            }
+
+            // Ordenar: Pastas primeiro
+            entries.sort((a, b) => (b.kind === 'directory') - (a.kind === 'directory') || a.name.localeCompare(b.name));
+
+            if (entries.length === 0) {
+                explorerGrid.innerHTML = '<div class="col-span-full text-slate-400 italic text-center py-10">Pasta vazia</div>';
+            }
+
+            entries.forEach(entry => {
+                const card = document.createElement('div');
+                card.className = "active-tap flex flex-col items-center p-4 rounded-[2rem] hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all cursor-pointer group border border-transparent hover:border-slate-100";
+                
+                const isDir = entry.kind === 'directory';
+                const icon = isDir ? 'folder' : getFileIcon(entry.name);
+                const color = isDir ? 'text-amber-400 fill-amber-400' : 'text-slate-400';
+
+                card.innerHTML = `
+                    <div class="w-14 h-14 flex items-center justify-center mb-3">
+                        <i data-lucide="${icon}" class="w-10 h-10 ${color} group-hover:scale-110 transition-transform"></i>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-600 text-center truncate w-full px-2" title="${entry.name}">${entry.name}</span>
+                `;
+
+                card.onclick = () => {
+                    if (isDir) {
+                        pathHistory.push(entry);
+                        loadDirectory(entry);
+                    } else {
+                        openFile(entry);
+                    }
+                };
+
+                explorerGrid.appendChild(card);
+            });
+
+            lucide.createIcons();
+        }
+
+        async function openFile(handle) {
+            const file = await handle.getFile();
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            // Suporte para edição de texto
+            const textExts = ['txt', 'html', 'css', 'js', 'json', 'md', 'py', 'php'];
+            
+            if (textExts.includes(ext)) {
+                const content = await file.text();
+                currentFileHandle = handle;
+                document.getElementById('editor-title').innerText = file.name;
+                document.getElementById('editor-content').value = content;
+                document.getElementById('editor-modal').classList.remove('hidden');
+                lucide.createIcons();
+            } else {
+                alert(`Arquivo "${file.name}" reconhecido. Por segurança, apenas arquivos de texto/código podem ser editados diretamente.`);
+            }
+        }
+
+        // SALVAMENTO REAL NO DISCO
+        document.getElementById('btn-save').onclick = async () => {
+            if (!currentFileHandle) return;
+            
+            try {
+                const writable = await currentFileHandle.createWritable();
+                await writable.write(document.getElementById('editor-content').value);
+                await writable.close();
+                
+                const btn = document.getElementById('btn-save');
+                btn.innerHTML = '<i data-lucide="check" class="w-4 h-4"></i> SALVO!';
+                setTimeout(() => {
+                    btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> SALVAR ALTERAÇÕES';
+                    lucide.createIcons();
+                }, 2000);
+            } catch (err) {
+                alert("Erro ao salvar: Verifique se você deu permissão de escrita.");
+            }
+        };
+
+        function closeEditor() {
+            document.getElementById('editor-modal').classList.add('hidden');
+            currentFileHandle = null;
+        }
+
+        function updateBreadcrumbs() {
+            breadcrumb.innerHTML = pathHistory.map((h, i) => `
+                <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
+                <button onclick="jumpTo(${i})" class="${i === pathHistory.length -1 ? 'text-indigo-600 font-bold' : 'hover:text-slate-600'} transition-colors">
+                    ${h.name}
+                </button>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function jumpTo(index) {
+            pathHistory = pathHistory.slice(0, index + 1);
+            loadDirectory(pathHistory[index]);
+        }
+
+        function getFileIcon(name) {
+            const ext = name.split('.').pop().toLowerCase();
+            if (['jpg', 'png', 'svg', 'webp'].includes(ext)) return 'image';
+            if (['mp4', 'webm'].includes(ext)) return 'video';
+            if (['txt', 'md', 'js', 'html'].includes(ext)) return 'file-text';
+            return 'file';
+        }
+    </script>
+</body>
+</html>
+
