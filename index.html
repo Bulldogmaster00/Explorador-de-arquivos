@@ -3,165 +3,192 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sistema de Ficheiros</title>
+    <title>Menu de Ficheiros Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
     <style>
-        :root { --bg-deep: #050505; }
+        :root { --bg-primary: #0a0a0a; }
         body {
             font-family: 'Outfit', sans-serif;
-            background-color: var(--bg-deep);
+            background-color: var(--bg-primary);
             color: white;
             overflow: hidden;
             touch-action: none;
+            height: 100vh;
         }
 
-        /* --- Área de Trabalho --- */
         #viewport {
             position: absolute; inset: 0;
             display: flex; align-items: center; justify-content: center;
-            background: radial-gradient(circle at center, #111 0%, #000 100%);
+            background: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
         }
 
-        /* --- Grelha de Ícones --- */
         #menu-grid {
             position: relative;
             display: flex; flex-wrap: wrap;
             justify-content: center; align-items: center;
             width: 95vw; max-width: 900px;
-            gap: 20px;
+            gap: 15px;
             transition: transform 0.1s ease-out;
+            padding-top: 80px;
         }
 
-        /* --- Estilo dos Botões do Menu --- */
         .menu-item {
-            width: 100px; height: 100px;
-            border-radius: 24px;
+            width: 90px; height: 110px;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            position: relative;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            border: 1px solid rgba(255,255,255,0.05);
-            background: rgba(255,255,255,0.03);
-            backdrop-filter: blur(10px);
-            animation: fadeIn 0.5s ease backwards;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
         }
 
-        @keyframes fadeIn {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+        .icon-box {
+            width: 64px; height: 64px;
+            border-radius: 18px;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
 
-        .menu-item:active { transform: scale(0.9); background: rgba(255,255,255,0.1); }
-
-        /* Cores de Categoria */
-        .bg-folder { background: linear-gradient(135deg, #fbbf24, #d97706); }
-        .bg-img    { background: linear-gradient(135deg, #38bdf8, #0284c7); }
-        .bg-vid    { background: linear-gradient(135deg, #f472b6, #db2777); }
-        .bg-code   { background: linear-gradient(135deg, #34d399, #059669); }
-        .bg-doc    { background: linear-gradient(135deg, #818cf8, #4f46e5); }
-
+        .menu-item:active { transform: scale(0.9); }
         .menu-item span {
-            font-size: 10px; font-weight: 500;
-            margin-top: 8px; max-width: 85%;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            color: rgba(255,255,255,0.8);
+            font-size: 10px; font-weight: 500; text-align: center;
+            width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            color: #ccc;
         }
 
-        /* Botão de Entrada */
-        .entry-orb {
-            width: 140px; height: 140px;
-            background: #fff; color: #000;
-            border-radius: 40px; display: flex;
-            flex-direction: column; align-items: center; justify-content: center;
-            font-weight: 700; text-transform: uppercase;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-            cursor: pointer; transition: all 0.3s;
-        }
-        .entry-orb:active { transform: scale(0.95); }
+        .bg-folder { background: linear-gradient(135deg, #eab308, #a16207); }
+        .bg-img    { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+        .bg-vid    { background: linear-gradient(135deg, #f43f5e, #be123c); }
+        .bg-code   { background: linear-gradient(135deg, #10b981, #065f46); }
 
-        /* Barra Superior */
         .nav-bar {
             position: fixed; top: 0; left: 0; right: 0;
-            background: rgba(0,0,0,0.6);
+            background: rgba(10,10,10,0.8);
             backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            padding: 15px 25px;
+            padding: 12px 20px;
             z-index: 100; display: flex; align-items: center; justify-content: space-between;
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
         .action-btn {
-            width: 44px; height: 44px;
+            width: 40px; height: 40px;
             border-radius: 12px; display: flex;
             align-items: center; justify-content: center;
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.07);
             transition: 0.2s;
         }
-        .action-btn:active { background: rgba(255,255,255,0.15); }
 
-        /* Visualizador Moderno */
+        /* Video Responsive Logic */
+        .video-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #v-vid {
+            max-width: 100%;
+            max-height: calc(100vh - 150px);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
         #viewer {
             position: fixed; inset: 0; z-index: 200;
             background: #000;
             display: none; flex-direction: column;
         }
+
+        .loading-overlay {
+            position: fixed; inset: 0; background: #000; z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.5s;
+        }
     </style>
 </head>
 <body>
 
-    <!-- Barra de Navegação -->
-    <div id="nav" class="nav-bar opacity-0 transition-opacity duration-500">
-        <div class="flex items-center gap-4">
-            <button onclick="goBack()" id="back-btn" class="action-btn hidden"><i data-lucide="chevron-left"></i></button>
-            <div>
-                <h2 id="view-title" class="text-sm font-bold tracking-tight">MENU PRINCIPAL</h2>
-                <p id="item-count" class="text-[10px] text-gray-500 font-medium">0 itens carregados</p>
-            </div>
-        </div>
-        <label class="action-btn cursor-pointer bg-blue-600 text-white">
-            <i data-lucide="plus"></i>
-            <input type="file" id="add-input" multiple class="hidden">
-        </label>
+    <div id="loader" class="loading-overlay">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-white"></div>
     </div>
 
-    <!-- Área Principal -->
+    <div id="nav" class="nav-bar opacity-0 transition-opacity">
+        <div class="flex items-center gap-3">
+            <button onclick="goBack()" id="back-btn" class="action-btn hidden"><i data-lucide="chevron-left"></i></button>
+            <div>
+                <h2 id="view-title" class="text-xs font-bold tracking-widest uppercase">Sistema</h2>
+                <p id="item-count" class="text-[9px] text-gray-500 font-bold">A carregar...</p>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button onclick="location.reload()" class="action-btn"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+            <label class="action-btn cursor-pointer bg-blue-600">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+                <input type="file" id="add-input" multiple class="hidden">
+            </label>
+        </div>
+    </div>
+
     <div id="viewport">
         <div id="menu-grid">
-            <label class="entry-orb" id="starter">
-                <i data-lucide="folder-open" class="w-10 h-10 mb-2"></i>
-                <span class="text-xs">Abrir Menu</span>
+            <label class="flex flex-col items-center cursor-pointer active:scale-95 transition-transform" id="starter">
+                <div class="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-2xl mb-4">
+                    <i data-lucide="upload" class="text-black w-8 h-8"></i>
+                </div>
+                <span class="text-[10px] font-bold uppercase tracking-widest">Abrir Pasta</span>
                 <input type="file" id="init-input" multiple class="hidden">
             </label>
         </div>
     </div>
 
-    <!-- Visualizador de Conteúdo -->
     <div id="viewer">
-        <div class="p-6 flex justify-between items-center border-b border-white/5">
-            <h3 id="v-name" class="font-bold text-xs truncate text-gray-400 uppercase tracking-widest">Visualizar</h3>
-            <button onclick="closeViewer()" class="action-btn bg-white/5"><i data-lucide="x"></i></button>
+        <div class="p-4 flex justify-between items-center bg-zinc-950/50">
+            <div class="flex items-center gap-4">
+                <button onclick="closeViewer()" class="action-btn"><i data-lucide="arrow-left"></i></button>
+                <h3 id="v-name" class="font-bold text-[10px] truncate max-w-[150px] uppercase text-gray-400">Ficheiro</h3>
+            </div>
+            <button id="download-btn" class="action-btn bg-white/10"><i data-lucide="download"></i></button>
         </div>
         <div class="flex-1 flex items-center justify-center p-4">
-            <img id="v-img" class="max-w-full max-h-full object-contain hidden rounded-lg">
-            <video id="v-vid" controls class="max-w-full max-h-full hidden rounded-lg"></video>
-            <div id="v-text-container" class="w-full h-full bg-zinc-900 rounded-2xl p-6 hidden overflow-auto">
-                <pre id="v-text" class="text-emerald-500 font-mono text-xs whitespace-pre-wrap"></pre>
+            <img id="v-img" class="max-w-full max-h-[80vh] object-contain hidden rounded-lg">
+            <div id="v-vid-container" class="video-container hidden">
+                <video id="v-vid" controls playsinline></video>
+            </div>
+            <div id="v-text-container" class="w-full h-full bg-zinc-900 rounded-xl p-6 hidden overflow-auto">
+                <pre id="v-text" class="text-emerald-500 font-mono text-[10px] whitespace-pre-wrap"></pre>
             </div>
         </div>
     </div>
 
     <script>
+        let db;
         let fsData = { 'Raiz': { items: {} } };
         let currentPath = ['Raiz'];
-        
-        // --- Controlo de Navegação ---
+        let activeFile = null;
+
+        // --- Persistência com IndexedDB ---
+        const request = indexedDB.open("SistemaMenuDB", 1);
+        request.onupgradeneeded = e => {
+            const database = e.target.result;
+            if (!database.objectStoreNames.contains("files")) {
+                database.createObjectStore("files", { keyPath: "name" });
+            }
+        };
+
+        request.onsuccess = e => {
+            db = e.target.result;
+            loadFromStorage();
+        };
+
+        // --- Navegação e Arrastar ---
         let isDragging = false, startX, startY, tx = 0, ty = 0;
-        const viewport = document.getElementById('viewport');
         const grid = document.getElementById('menu-grid');
 
-        viewport.addEventListener('touchstart', (e) => {
-            if(e.target.closest('.menu-item, .entry-orb, .nav-bar')) return;
+        document.getElementById('viewport').addEventListener('touchstart', (e) => {
+            if(e.target.closest('.menu-item, label, button')) return;
             isDragging = true;
             startX = e.touches[0].clientX - tx;
             startY = e.touches[0].clientY - ty;
@@ -176,58 +203,85 @@
 
         document.addEventListener('touchend', () => isDragging = false);
 
-        // --- Gestão de Ficheiros ---
+        // --- Processamento de Ficheiros ---
         lucide.createIcons();
-
         document.getElementById('init-input').addEventListener('change', handleUpload);
         document.getElementById('add-input').addEventListener('change', handleUpload);
 
-        function handleUpload(e) {
+        async function handleUpload(e) {
             const files = Array.from(e.target.files);
             if(files.length === 0) return;
 
-            processFiles(files);
-            document.getElementById('starter').classList.add('hidden');
-            document.getElementById('nav').classList.remove('opacity-0');
+            for (const file of files) {
+                await saveToStorage(file);
+                addToFileSystem(file);
+            }
             
-            e.target.value = ''; // Reset para novas adições
+            checkStarter();
+            e.target.value = '';
             renderMenu();
         }
 
-        function processFiles(files) {
-            files.forEach(f => {
-                const ext = f.name.split('.').pop().toLowerCase();
-                let category = 'Documentos';
-                
-                if(['jpg','png','jpeg','gif','webp'].includes(ext)) category = 'Imagens';
-                else if(['mp4','mov','webm'].includes(ext)) category = 'Vídeos';
-                else if(['js','html','css','py','json'].includes(ext)) category = 'Scripts';
+        function addToFileSystem(f) {
+            const ext = f.name.split('.').pop().toLowerCase();
+            let cat = 'Documentos';
+            if(['jpg','png','jpeg','gif','webp'].includes(ext)) cat = 'Imagens';
+            else if(['mp4','mov','webm'].includes(ext)) cat = 'Vídeos';
+            else if(['js','html','css','py','txt','json'].includes(ext)) cat = 'Scripts';
 
-                if(!fsData['Raiz'].items[category]) {
-                    fsData['Raiz'].items[category] = { type: 'folder', name: category, items: {} };
-                }
-                
-                fsData['Raiz'].items[category].items[f.name] = { type: 'file', name: f.name, data: f };
+            if(!fsData['Raiz'].items[cat]) {
+                fsData['Raiz'].items[cat] = { type: 'folder', name: cat, items: {} };
+            }
+            fsData['Raiz'].items[cat].items[f.name] = { type: 'file', name: f.name, data: f };
+        }
+
+        async function saveToStorage(file) {
+            return new Promise((resolve) => {
+                const transaction = db.transaction("files", "readwrite");
+                const store = transaction.objectStore("files");
+                store.put({ name: file.name, content: file });
+                transaction.oncomplete = () => resolve();
             });
+        }
+
+        async function loadFromStorage() {
+            const transaction = db.transaction("files", "readonly");
+            const store = transaction.objectStore("files");
+            const request = store.getAll();
+            
+            request.onsuccess = () => {
+                if(request.result.length > 0) {
+                    request.result.forEach(item => addToFileSystem(item.content));
+                    checkStarter();
+                    renderMenu();
+                }
+                document.getElementById('loader').style.opacity = '0';
+                setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
+            };
+        }
+
+        function checkStarter() {
+            const hasFiles = Object.keys(fsData['Raiz'].items).length > 0;
+            document.getElementById('starter').style.display = hasFiles ? 'none' : 'flex';
+            document.getElementById('nav').classList.toggle('opacity-0', !hasFiles);
         }
 
         function renderMenu() {
             grid.innerHTML = '';
-            
             let current = fsData['Raiz'];
             for(let i = 1; i < currentPath.length; i++) {
                 current = current.items[currentPath[i]];
             }
 
             const items = Object.values(current.items);
-            document.getElementById('view-title').innerText = currentPath.length === 1 ? 'MENU PRINCIPAL' : current.name.toUpperCase();
-            document.getElementById('item-count').innerText = `${items.length} itens encontrados`;
-            document.getElementById('back-btn').style.display = currentPath.length > 1 ? 'flex' : 'none';
+            document.getElementById('view-title').innerText = currentPath.length === 1 ? 'SISTEMA' : current.name;
+            document.getElementById('item-count').innerText = `${items.length} itens`;
+            document.getElementById('back-btn').classList.toggle('hidden', currentPath.length === 1);
 
             items.forEach((item, idx) => {
                 const el = document.createElement('div');
-                let colorClass = 'bg-doc';
-                let iconName = 'file-text';
+                let colorClass = 'bg-zinc-800';
+                let iconName = 'file';
 
                 if(item.type === 'folder') {
                     colorClass = 'bg-folder';
@@ -235,14 +289,13 @@
                 } else {
                     const ext = item.name.split('.').pop().toLowerCase();
                     if(['jpg','png','jpeg','webp'].includes(ext)) { colorClass = 'bg-img'; iconName = 'image'; }
-                    else if(['mp4','mov','webm'].includes(ext)) { colorClass = 'bg-vid'; iconName = 'play-circle'; }
-                    else if(['js','html','py','css'].includes(ext)) { colorClass = 'bg-code'; iconName = 'terminal'; }
+                    else if(['mp4','mov','webm'].includes(ext)) { colorClass = 'bg-vid'; iconName = 'play'; }
+                    else if(['js','html','py'].includes(ext)) { colorClass = 'bg-code'; iconName = 'code'; }
                 }
 
                 el.className = `menu-item`;
-                el.style.animationDelay = `${idx * 0.04}s`;
                 el.innerHTML = `
-                    <div class="w-12 h-12 ${colorClass} rounded-xl flex items-center justify-center mb-1 shadow-lg">
+                    <div class="icon-box ${colorClass}">
                         <i data-lucide="${iconName}" class="text-white w-6 h-6"></i>
                     </div>
                     <span>${item.name}</span>
@@ -256,7 +309,6 @@
                         viewContent(item.data);
                     }
                 };
-
                 grid.appendChild(el);
             });
 
@@ -272,14 +324,16 @@
             }
         }
 
-        // --- Visualizador ---
+        // --- Visualizador e Download ---
         function viewContent(file) {
+            activeFile = file;
             const v = document.getElementById('viewer');
             const img = document.getElementById('v-img');
+            const vidCont = document.getElementById('v-vid-container');
             const vid = document.getElementById('v-vid');
             const txt = document.getElementById('v-text-container');
             
-            [img, vid, txt].forEach(el => el.classList.add('hidden'));
+            [img, vidCont, txt].forEach(el => el.classList.add('hidden'));
             document.getElementById('v-name').innerText = file.name;
             v.style.display = 'flex';
 
@@ -291,7 +345,7 @@
                 reader.readAsDataURL(file);
             } else if(['mp4','mov','webm'].includes(ext)) {
                 vid.src = URL.createObjectURL(file);
-                vid.classList.remove('hidden');
+                vidCont.classList.remove('hidden');
             } else {
                 reader.onload = e => { 
                     document.getElementById('v-text').innerText = e.target.result;
@@ -301,11 +355,24 @@
             }
         }
 
+        document.getElementById('download-btn').onclick = () => {
+            if(!activeFile) return;
+            const url = URL.createObjectURL(activeFile);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = activeFile.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
         function closeViewer() {
             document.getElementById('viewer').style.display = 'none';
             const vid = document.getElementById('v-vid');
             vid.pause();
             vid.src = "";
+            activeFile = null;
         }
     </script>
 </body>
