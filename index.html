@@ -40,6 +40,7 @@
             align-items: center; justify-content: center;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
+            position: relative;
         }
 
         .icon-box {
@@ -50,6 +51,24 @@
             border: 1px solid rgba(255,255,255,0.1);
             margin-bottom: 8px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .delete-badge {
+            position: absolute; -top: 8px; -right: 8px;
+            width: 24px; height: 24px;
+            background: #ef4444; color: white;
+            border-radius: 50%; display: none;
+            align-items: center; justify-content: center;
+            z-index: 10; border: 2px solid #000;
+        }
+
+        .edit-mode .delete-badge { display: flex; }
+        .edit-mode .menu-item { animation: wiggle 0.3s infinite alternate; }
+
+        @keyframes wiggle {
+            from { transform: rotate(-1deg); }
+            to { transform: rotate(1deg); }
         }
 
         .menu-item:active { transform: scale(0.9); }
@@ -80,26 +99,22 @@
             background: rgba(255,255,255,0.07);
             transition: 0.2s;
         }
+        
+        .action-btn.active { background: #ef4444; color: white; }
 
-        /* Video Responsive Logic */
         .video-container {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
         }
         
         #v-vid {
-            max-width: 100%;
-            max-height: calc(100vh - 150px);
+            max-width: 100%; max-height: calc(100vh - 150px);
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
 
         #viewer {
             position: fixed; inset: 0; z-index: 200;
-            background: #000;
-            display: none; flex-direction: column;
+            background: #000; display: none; flex-direction: column;
         }
 
         .loading-overlay {
@@ -124,6 +139,9 @@
             </div>
         </div>
         <div class="flex gap-2">
+            <button onclick="toggleEditMode()" id="edit-btn" class="action-btn" title="Remover ficheiros">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
             <button onclick="location.reload()" class="action-btn"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
             <label class="action-btn cursor-pointer bg-blue-600">
                 <i data-lucide="plus" class="w-5 h-5"></i>
@@ -168,6 +186,7 @@
         let fsData = { 'Raiz': { items: {} } };
         let currentPath = ['Raiz'];
         let activeFile = null;
+        let isEditMode = false;
 
         // --- Persistência com IndexedDB ---
         const request = indexedDB.open("SistemaMenuDB", 1);
@@ -211,12 +230,10 @@
         async function handleUpload(e) {
             const files = Array.from(e.target.files);
             if(files.length === 0) return;
-
             for (const file of files) {
                 await saveToStorage(file);
                 addToFileSystem(file);
             }
-            
             checkStarter();
             e.target.value = '';
             renderMenu();
@@ -244,11 +261,19 @@
             });
         }
 
+        async function removeFromStorage(name) {
+            return new Promise((resolve) => {
+                const transaction = db.transaction("files", "readwrite");
+                const store = transaction.objectStore("files");
+                store.delete(name);
+                transaction.oncomplete = () => resolve();
+            });
+        }
+
         async function loadFromStorage() {
             const transaction = db.transaction("files", "readonly");
             const store = transaction.objectStore("files");
             const request = store.getAll();
-            
             request.onsuccess = () => {
                 if(request.result.length > 0) {
                     request.result.forEach(item => addToFileSystem(item.content));
@@ -258,6 +283,32 @@
                 document.getElementById('loader').style.opacity = '0';
                 setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
             };
+        }
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            document.getElementById('edit-btn').classList.toggle('active', isEditMode);
+            grid.classList.toggle('edit-mode', isEditMode);
+        }
+
+        async function deleteItem(e, itemName, catName) {
+            e.stopPropagation();
+            if (!confirm(`Deseja remover "${itemName}"?`)) return;
+
+            // Remover do storage
+            await removeFromStorage(itemName);
+
+            // Remover da estrutura em memória
+            delete fsData['Raiz'].items[catName].items[itemName];
+
+            // Se a pasta ficar vazia, removemos a pasta
+            if (Object.keys(fsData['Raiz'].items[catName].items).length === 0) {
+                delete fsData['Raiz'].items[catName];
+                if (currentPath.length > 1) goBack(); // Volta se estivermos dentro da pasta apagada
+            }
+
+            checkStarter();
+            renderMenu();
         }
 
         function checkStarter() {
@@ -294,14 +345,20 @@
                 }
 
                 el.className = `menu-item`;
+                
+                // Determinar a categoria para a função de delete
+                const catName = currentPath.length === 1 ? item.name : currentPath[1];
+
                 el.innerHTML = `
                     <div class="icon-box ${colorClass}">
+                        ${item.type === 'file' ? `<div class="delete-badge" onclick="deleteItem(event, '${item.name}', '${catName}')"><i data-lucide="x" class="w-3 h-3"></i></div>` : ''}
                         <i data-lucide="${iconName}" class="text-white w-6 h-6"></i>
                     </div>
                     <span>${item.name}</span>
                 `;
 
                 el.onclick = () => {
+                    if (isEditMode && item.type === 'file') return;
                     if(item.type === 'folder') {
                         currentPath.push(item.name);
                         renderMenu();
@@ -324,7 +381,6 @@
             }
         }
 
-        // --- Visualizador e Download ---
         function viewContent(file) {
             activeFile = file;
             const v = document.getElementById('viewer');
